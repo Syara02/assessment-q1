@@ -1,84 +1,92 @@
-/**
- * Function to compute the correct ordering for the tasks specified in the config.
- *
- * @param {Object[]} tasks - The array of tasks with their dependencies.
- * @returns {string[]} The correct ordering of the tasks.
- */
-function computeTaskOrder(tasks) {
-    // Create a map to store the dependencies for each task
-    const dependenciesMap = {};
+<?php
 
-    // Create a map to store the number of dependencies for each task
-    const numDependenciesMap = {};
+class TaskScheduler {
 
-    // Iterate through the tasks and populate the dependencies map and num dependencies map
-    for (const task of tasks) {
-        const { name, depends_on } = task;
-        dependenciesMap[name] = depends_on;
-        numDependenciesMap[name] = depends_on.length;
+    /** @var array $tasks The list of tasks and their dependencies. */
+    private $tasks;
+
+    /** @var array $order The computed order of tasks. */
+    private $order;
+
+    /** Constructor for the TaskScheduler class. */
+    public function __construct($tasks) {
+        $this->tasks = $tasks;
+        $this->order = [];
     }
 
-    // Create a queue to store the tasks with no dependencies
-    const queue = [];
+    /**
+     * Compute the correct ordering for the tasks.
+     *
+     * @return array The computed order of tasks.
+     *
+     * @throws Exception If the ordering is not possible due to circular dependencies.
+     */
+    public function compute_order() {
+        $visited = [];
+        $stack = [];
 
-    // Add the tasks with no dependencies to the queue
-    for (const task of tasks) {
-        const { name, depends_on } = task;
-        if (depends_on.length === 0) {
-            queue.push(name);
+        foreach ($this->tasks as $task) {
+            $name = $task['name'];
+            if (!isset($visited[$name])) {
+                $this->dfs($name, $visited, $stack);
+            }
         }
+
+        return $this->order;
     }
 
-    // Create an array to store the correct ordering of the tasks
-    const taskOrder = [];
+    private function dfs($task, &$visited, &$stack) {
+        $visited[$task] = true;
+        $stack[$task] = true;
 
-    // Process the tasks in the queue
-    while (queue.length > 0) {
-        const task = queue.shift();
-        taskOrder.push(task);
-
-        // Decrease the number of dependencies for the dependent tasks
-        for (const dependentTask in dependenciesMap) {
-            if (dependenciesMap[dependentTask].includes(task)) {
-                numDependenciesMap[dependentTask]--;
-
-                // If all dependencies are completed, add the dependent task to the queue
-                if (numDependenciesMap[dependentTask] === 0) {
-                    queue.push(dependentTask);
+        foreach ($this->tasks as $t) {
+            if ($t['name'] == $task) {
+                foreach ($t['depends_on'] as $dependency) {
+                    if (!isset($visited[$dependency])) {
+                        $this->dfs($dependency, $visited, $stack);
+                    }
+                    elseif (isset($stack[$dependency])) {
+                        throw new Exception("Circular dependency detected.");
+                    }
                 }
             }
         }
-    }
 
-    // Check if there are any tasks with remaining dependencies
-    for (const task in numDependenciesMap) {
-        if (numDependenciesMap[task] > 0) {
-            throw new Error(`Cannot compute task order. Task '${task}' has unresolved dependencies.`);
-        }
+        array_push($this->order, $task);
+        unset($stack[$task]);
     }
-
-    return taskOrder;
 }
 
-// Example usage
-const tasks = [
-    {
-        name: "compile",
-        depends_on: ["check_build_script", "lint"]
-    },
-    {
-        name: "lint",
-        depends_on: ["check_build_script"]
-    },
-    {
-        name: "package",
-        depends_on: ["compile"]
-    },
-    {
-        name: "test",
-        depends_on: ["package"]
-    }
+// Example 1: Computing the order of tasks
+$tasks = [
+    [
+        "name" => "compile",
+        "depends_on" => ["check_build_script", "lint"]
+    ],
+    [
+        "name" => "lint",
+        "depends_on" => ["check_build_script"]
+    ],
+    [
+        "name" => "package",
+        "depends_on" => ["compile"]
+    ],
+    [
+        "name" => "test",
+        "depends_on" => ["package"]
+    ]
 ];
 
-const taskOrder = computeTaskOrder(tasks);
-console.log("Task Order:", taskOrder);
+$taskScheduler = new TaskScheduler($tasks);
+try {
+    $order = $taskScheduler->compute_order();
+    echo "The correct order of tasks is: " ."\n";
+    foreach ($order as $task) {
+        echo " -" . $task . "\n";
+    }
+    // implode(" -> ", $order) . "\n";
+} catch (Exception $e) {
+    echo "Error: " . $e->getMessage() . "\n";
+}
+
+?>
