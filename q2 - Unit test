@@ -1,0 +1,125 @@
+<?php
+use PHPUnit\Framework\TestCase;
+
+/**
+ * TestTaskScheduler
+ *
+ * A suite of test cases for the TaskScheduler class to ensure correct computation
+ * of task order and handling of circular dependencies.
+ */
+class TestTaskScheduler extends TestCase {
+
+    /**
+     * Tests valid initialization of a TaskScheduler object with non-empty task list.
+     *
+     * @return void
+     */
+    public function testValidInitialization() {
+        $tasks = [
+            [
+                "name" => "check_build_script",
+                "depends_on" => []
+            ],
+            [
+                "name" => "lint",
+                "depends_on" => ["check_build_script"]
+            ],
+            [
+                "name" => "compile",
+                "depends_on" => ["check_build_script", "lint"]
+            ],
+            [
+                "name" => "package",
+                "depends_on" => ["compile"]
+            ],
+            [
+                "name" => "test",
+                "depends_on" => ["package"]
+            ]
+        ];
+
+        $scheduler = new TaskScheduler($tasks);
+        $this->assertEquals($tasks, $scheduler->getTasks());
+        $this->assertEquals([], $scheduler->getOrder());
+    }
+
+    /**
+     * Tests initialization with an empty task list.
+     *
+     * @return void
+     */
+    public function testInitializationWithEmptyTaskList() {
+        $this->expectException(Exception::class);
+        new TaskScheduler([]);
+    }
+
+    /**
+     * Tests computation of task order for a valid task list.
+     *
+     * @return void
+     */
+    public function testComputeOrder() {
+        $tasks = [
+            [
+                "name" => "check_build_script",
+                "depends_on" => []
+            ],
+            [
+                "name" => "lint",
+                "depends_on" => ["check_build_script"]
+            ],
+            [
+                "name" => "compile",
+                "depends_on" => ["check_build_script", "lint"]
+            ],
+            [
+                "name" => "package",
+                "depends_on" => ["compile"]
+            ],
+            [
+                "name" => "test",
+                "depends_on" => ["package"]
+            ]
+        ];
+
+        $scheduler = new TaskScheduler($tasks);
+        $order = $scheduler->compute_order();
+
+        $expectedOrder = [
+            "check_build_script",
+            "lint",
+            "compile",
+            "package",
+            "test"
+        ];
+
+        $this->assertEquals($expectedOrder, $order);
+    }
+
+    /**
+     * Tests computation of task order for a task list with circular dependencies.
+     *
+     * @return void
+     */
+    public function testComputeOrderWithCircularDependencies() {
+        $tasks = [
+            [
+                "name" => "task1",
+                "depends_on" => ["task2"]
+            ],
+            [
+                "name" => "task2",
+                "depends_on" => ["task3"]
+            ],
+            [
+                "name" => "task3",
+                "depends_on" => ["task1"]
+            ]
+        ];
+
+        $scheduler = new TaskScheduler($tasks);
+
+        $this->expectException(Exception::class);
+        $scheduler->compute_order();
+    }
+}
